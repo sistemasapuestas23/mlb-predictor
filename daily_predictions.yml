@@ -1,0 +1,54 @@
+name: Daily MLB Predictions
+
+on:
+  schedule:
+    # 11:34 AM ET (15:34 UTC), ~30 min antes del primer juego tipico (12:05 ET)
+    # Ajusta segun la hora del primer pitch de la jornada (sept: 12:05 ET)
+    - cron: "34 15 * * *"
+  workflow_dispatch:
+    inputs:
+      date:
+        description: "Fecha a predecir (YYYY-MM-DD), vacio = hoy"
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: daily-predictions
+  cancel-in-progress: true
+
+jobs:
+  predict:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run daily predictions
+        env:
+          TELEGRAM_TOKEN: ${{ secrets.TEGRAM_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TEGRAM_CHAT_ID }}
+          OPENWEATHER_API_KEY: ${{ secrets.OPENWEATHER_API_KEY }}
+          RUN_DATE: ${{ github.event.inputs.date }}
+        run: |
+          ARGS=""
+          if [ -n "$RUN_DATE" ]; then ARGS="--date $RUN_DATE"; fi
+          python scripts/run_daily.py $ARGS
+
+      - name: Upload run logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: run-log
+          path: logs/
+          retention-days: 7
